@@ -1,0 +1,15 @@
+--- # Creating Targets for the Servers
+- hosts: frontend
+  user: ubuntu
+  become: yes
+  connection: ssh
+  roles:
+      - frontend_server
+
+- hosts: backend
+  user: ubuntu
+  become: yes
+  connection: ssh
+  roles:
+      - backend_server
+

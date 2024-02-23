@@ -1,0 +1,6 @@
+--- # Creating my first target playbook
+- hosts: backend
+  user: ansible
+  become: yes
+  connection: ssh
+  gather_facts: yes

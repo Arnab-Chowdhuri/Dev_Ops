@@ -1,0 +1,12 @@
+--- # Creating Handler Playbook
+- hosts: front
+  user: ansible
+  connection: ssh
+  become: yes
+  tasks:
+      - name: Installing HTTPD in nodes
+        action: apt name=apache2 state=present
+        notify: restart APACHE2
+  handlers:
+      - name: restart APACHE2
+        action: service name=apache2 state=restarted

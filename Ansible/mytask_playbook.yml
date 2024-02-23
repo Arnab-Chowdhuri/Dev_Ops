@@ -1,0 +1,22 @@
+--- # Creating TASK playbok to install tree
+- hosts: all
+  user: ansible
+  become: yes
+  connection: ssh
+  tasks:
+    #- name: Install tree on machine
+    #  action: apt name=tree state=present
+
+    # OR
+    - name: Install tree on machine
+      apt:
+        name: tree
+        state: absent
+
+    # OR
+    #-name: To Install multiple things using apt module
+    # apt:
+    #   name:
+    #     - tree
+    #     - python3
+    #   state: present
