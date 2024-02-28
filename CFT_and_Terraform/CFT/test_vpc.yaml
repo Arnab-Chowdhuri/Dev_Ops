@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS CloudFormation Template for creating a VPC"
+
+Parameters:
+  VPCCidrBlock:
+    Type: String
+    Description: "CIDR block for the VPC"
+    Default: "10.0.0.0/16"
+
+  VPCName:
+    Type: String
+    Description: "Name for the VPC"
+    Default: "MyVPC"
+
+  PublicSubnetCidrBlocks:
+    Type: String
+    Description: "CIDR blocks for the public subnets"
+    Default: "10.0.1.0/24"
+
+  PublicSubnateName:
+    Type: String
+    Description: "Name for the Public Subnet"
+    Default: "PubSub1"
+
+  PrivateSubnetCidrBlocks:
+    Type: String
+    Description: "CIDR blocks for the private subnets"
+    Default: "10.0.2.0/24"
+
+  PrivateSubnateName:
+    Type: String
+    Description: "Name for the Private Subnet"
+    Default: "PriSub1"
+
+  # AvailabilityZones1:
+  #   Type: CommaDelimitedList
+  #   Description: "Availability Zones for subnets in Mumbai region"
+  #   Default: "ap-south-1a,ap-south-1b"
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidrBlock
+      Tags:
+        - Key: Name
+          Value: !Ref VPCName
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PublicSubnetCidrBlocks
+      AvailabilityZone: "ap-south-1a"
+      Tags:
+      - Key: Name
+        Value: !Ref PublicSubnateName
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PrivateSubnetCidrBlocks
+      AvailabilityZone: "ap-south-1b"
+      Tags:
+      - Key: Name
+        Value: !Ref PrivateSubnateName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: "ap-south-1a"
+      Tags:
+      - Key: Name
+        Value: !Ref PrivateSubnateName
+
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: IG_CFT
+
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+  PubRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+      - Key: Name
+        Value: Pub_RT
+
+  PubSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PubRouteTable
+
+  myPubRoute:
+    Type: AWS::EC2::Route
+    Properties:
+       RouteTableId: !Ref PubRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref myInternetGateway
+
+  PriRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+      - Key: Name
+        Value: Pri_RT
+
+  PriSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PriRouteTable
+
+  PriSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PriRouteTable
+
+  EIPforNAT:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPforNAT.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+      - Key: Name
+        Value: NAT_CFT
+
+  NATGatewayRoute: #Creating the route from private RT to nat gateway
+   DependsOn: NATGateway
+   Type: AWS::EC2::Route
+   Properties:
+      RouteTableId: !Ref PriRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  FrontEndSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MyFrontEndSecurityGroup"
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 22   # SSH
+          ToPort: 22
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 80   # HTTP
+          ToPort: 80
+      Tags:
+        - Key: "Name"
+          Value: "MyFrontEndSecurityGroup"
+
+  BackEndSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MyBackEndSecurityGroup"
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 22   # SSH
+          ToPort: 22
+      Tags:
+        - Key: "Name"
+          Value: "MyBackEndSecurityGroup"
+
+
+
+
+
+  
+
+Outputs:
+  VPCId:
+    Description: "ID of the created VPC"
+    Value: !Ref MyVPC
+  PublicSubnet1Id:
+    Description: "ID of the created Public Subnet 1"
+    Value: !Ref PublicSubnet1
+  PrivateSubnet1Id:
+    Description: "ID of the created Private Subnet 1"
+    Value: !Ref PrivateSubnet1

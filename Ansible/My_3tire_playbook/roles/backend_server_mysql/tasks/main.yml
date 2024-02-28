@@ -1,0 +1,163 @@
+---
+- name: First update the packagers
+  apt: update_cache=yes force_apt_get=yes
+
+- name: Install Python3 and pip
+  apt:
+      name:
+        - python3-pip
+        - python3-dev
+      state: present
+
+- name: Installing virtualenv using pip3
+  pip:
+    name: virtualenv
+    executable: pip3
+
+- name: Check if .git directory exists
+  stat:
+      path: /home/ubuntu/new_chatapp/.git
+  register: git_repo_status
+
+- name: Clone the repository if .git directory doesn't exist
+  git:
+      repo: https://github.com/Arnab-Chowdhuri/new_chatapp.git
+      dest: /home/ubuntu/new_chatapp
+  when: git_repo_status.stat.exists == false
+
+- name: Creating virtual environment inside new_chatapp
+  command:
+    cmd: virtualenv /home/ubuntu/new_chatapp/venv
+    creates: /home/ubuntu/new_chatapp/venv
+
+- name: Installing requirements.txt in virtualenv
+  pip:
+    requirements: /home/ubuntu/new_chatapp/requirements.txt
+    virtualenv: /home/ubuntu/new_chatapp/venv
+    virtualenv_python: python3
+    # specifying the Python interpreter explicitly
+    # this line is used to specify the Python interpreter to be used when creating the virtual environment. In this case, it explicitly sets python3 as the Python interpreter to be used.
+    # if this line is not mentioned then python will use the default python interpreter available on the system.
+
+- name: Installing gunicorn
+  pip:
+    name: gunicorn
+    executable: pip3
+
+- name: installing mysql-server
+  apt: name=mysql-server state=present
+
+- name: intalling mysql-client
+  apt: name=mysql-client state=present
+
+- name: Start the MySQL service
+  action: service name=mysql state=started
+
+- name: Installing PyMySql
+  pip:
+    name: pymysql
+    executable: pip3
+
+- name: install default-libmysqlclient-dev package for chat app
+  apt: name=default-libmysqlclient-dev state=present
+
+- name: install libssl-dev package for chat app
+  apt: name=libssl-dev state=present
+
+- name: install mysqlclient
+  pip:
+    name: mysqlclient
+    virtualenv: /home/ubuntu/new_chatapp/venv
+
+- name: install package for chat app
+  apt: name=python3-psycopg2 state=present
+
+- name: install psycopg2-binary
+  pip:
+    name: psycopg2-binary
+    virtualenv: /home/ubuntu/new_chatapp/venv
+    virtualenv_python: python3
+
+- name: creating mysql_db database
+  mysql_db:
+    name: MYsql_db
+    login_host: localhost
+    login_user: root
+    login_password: MnrLw87zY
+
+
+      #- name: creating chat_db database
+  #mysql_db:
+    #name: mysql_db
+      #login_host: localhost
+      #login_user: root
+      #login_password: root123
+
+- name: Creating new mysql user
+  mysql_user:
+    name: arnab
+    password: mysql1234
+    priv: 'MYsql_db.*:ALL'
+    login_host: localhost
+    login_user: root
+    login_password: MnrLw87zY
+
+- name: Flush privileges
+  command: mysql -uroot -pMnrLw87zY -e "FLUSH PRIVILEGES"
+
+      #- name: Replace old database configuration with new one in settings.py
+      #replace:
+      # path: /home/ubuntu/new_chatapp/fundoo/fundoo/settings.py
+      # regexp: "{{ item.regexp }}"
+      # replace: "{{ item.replace }}"
+      #  with_items:
+      # - { regexp: "'NAME': 'mysqldb',", replace: "'NAME': 'mysql_db'," }
+      # - { regexp: "'PASSWORD': 'admin12345',", replace: "'PASSWORD': 'mysql1234'," }
+      # - { regexp: "'HOST': 'mysqldb.ckz7bawd2dzf.ap-south-1.rds.amazonaws.com',", replace: "'HOST': 'localhost'," }
+
+- name: editing settings.py file to change db configs
+  blockinfile:
+    path: /home/ubuntu/new_chatapp/fundoo/fundoo/settings.py
+    marker_begin: "DATABASES = {"
+    marker_end: "}"
+    block: |-
+      DATABASES = {
+        'default': {
+          'ENGINE': 'django.db.backends.mysql',
+          'NAME': 'MYsql_db',
+          'USER': 'arnab',
+          'PASSWORD': 'mysql1234',
+          'HOST': 'localhost',
+          'PORT': '3306',
+        }
+      }
+
+- name: running python migrate
+  django_manage:
+    command:  migrate
+    app_path: /home/ubuntu/new_chatapp/fundoo
+    virtualenv: /home/ubuntu/new_chatapp/venv
+
+- name: running python makemigration
+  django_manage:
+    command:  makemigrations
+    app_path: /home/ubuntu/new_chatapp/fundoo
+    virtualenv: /home/ubuntu/new_chatapp/venv
+
+- name: creating gunicorn.service file
+  file:
+    path: /etc/systemd/system/gunicorn.service
+    state: touch
+
+- name: copying gunicorn template to gunicorn.service file
+  template:
+    src: gunicorn_template.j2
+    dest: /etc/systemd/system/gunicorn.service
+
+- name: starting and enabling  gunicorn
+  service:
+    name: gunicorn
+    enabled: true
+    daemon-reload: yes
+    state: started
+

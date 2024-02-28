@@ -1,0 +1,9 @@
+ansible-vault create playbook.yml    ---->  For creating a new encrypted playbook
+
+ansible-vault edit playbook.yml      ---->  For editing an encrypted playbook
+
+ansible-vault rekey playbook.yml     ---->  For changing password of an encrypted playbook
+
+ansible-vault encrypt playbook.yml   ---->  For encrypting an existing playbook if playbook is already present
+
+ansible-vault decrypt playbook.yml   ---->  For decrypting and encrypted playbook

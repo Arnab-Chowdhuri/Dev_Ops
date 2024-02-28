@@ -1,0 +1,3 @@
+--- # Here all the variables are present
+proxy_pass_rds: 172.31.37.164
+proxy_pass_db: 172.31.42.214

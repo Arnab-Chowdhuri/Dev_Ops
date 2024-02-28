@@ -1,0 +1,340 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS CloudFormation Template for creating a VPC"
+
+Parameters:
+  VPCCidrBlock:
+    Type: String
+    Description: "CIDR block for the VPC"
+    Default: "10.0.0.0/16"
+
+  VPCName:
+    Type: String
+    Description: "Name for the VPC"
+    Default: "MyVPC"
+
+  PublicSubnetCidrBlocks:
+    Type: String
+    Description: "CIDR blocks for the public subnets"
+    Default: "10.0.1.0/24"
+
+  PublicSubnateName:
+    Type: String
+    Description: "Name for the Public Subnet"
+    Default: "PubSub1"
+
+  PrivateSubnetCidrBlocks:
+    Type: String
+    Description: "CIDR blocks for the private subnets"
+    Default: "10.0.2.0/24"
+
+  PrivateSubnateName:
+    Type: String
+    Description: "Name for the Private Subnet"
+    Default: "PriSub1"
+
+
+
+Resources:
+
+  # Creating Vpc by taking Id and Name from Parameters (using intrinsic function :- Reference)
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidrBlock
+      Tags:
+        - Key: Name
+          Value: !Ref VPCName
+
+  # Creating Public Subnet by taking VPC Id from Logical Resource Name (MyVPV)
+  PublicSubnet1:
+    DependsOn: MyVPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PublicSubnetCidrBlocks
+      AvailabilityZone: us-east-2a
+      Tags:
+      - Key: Name
+        Value: !Ref PublicSubnateName
+
+  # Creating Private Subnet by taking VPC Id from Logical Resource Name (MyVPV)
+  PrivateSubnet1:
+    DependsOn: MyVPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PrivateSubnetCidrBlocks
+      AvailabilityZone: us-east-2b
+      Tags:
+      - Key: Name
+        Value: !Ref PrivateSubnateName
+
+  # Creating Private Subnet by taking VPC Id from Logical Resource Name (MyVPV)
+  PrivateSubnet2:
+    DependsOn: MyVPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: us-east-2a
+      Tags:
+      - Key: Name
+        Value: PriSub2
+
+  # Creating IG
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: IG_CFT
+
+  # Attaching IG to VPC taking reference from Logical Resource names
+  AttachInternetGateway:
+    DependsOn: MyVPC
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+  # Creating Public Route Table in VPC 
+  PubRouteTable:
+    DependsOn: MyVPC
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+      - Key: Name
+        Value: Pub_RT
+
+  # Associating Public Subnet with Public Route Table
+  PubSubnetRouteTableAssociation:
+    DependsOn: 
+      - PublicSubnet1
+      - PubRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PubRouteTable
+
+  # Creating route for Pubic Route Table target->IG and destination-> 0.0.0.0/0
+  myPubRoute:
+    Type: AWS::EC2::Route
+    DependsOn: PubSubnetRouteTableAssociation
+    Properties:
+       RouteTableId: !Ref PubRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref myInternetGateway
+
+  # Creating Private Route Table in VPC
+  PriRouteTable:
+    DependsOn: MyVPC
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+      - Key: Name
+        Value: Pri_RT
+
+  # Associating Private Subnet1 with Private Route Table
+  PriSubnetRouteTableAssociation1:
+    DependsOn: 
+      - PrivateSubnet1
+      - PriRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PriRouteTable
+
+  # Associating Private Subnet2 with Private Route Table
+  PriSubnetRouteTableAssociation2:
+    DependsOn: 
+      - PrivateSubnet2
+      - PriRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PriRouteTable
+
+  # Creating a Elastic IP address
+  EIPforNAT:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  # Attaching EIP with NAT GW
+  NATGateway:
+    DependsOn: PublicSubnet1
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPforNAT.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+      - Key: Name
+        Value: NAT_CFT
+
+  # Creating route for Pubic Route Table target->NAT GW and destination-> 0.0.0.0/0
+  myPriRoute:
+    DependsOn: NATGateway
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PriRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  # Creating Security group for FrontEnd allowing SSH and HTTP
+  FrontEndSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MyFrontEndSecurityGroup"
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 22   # SSH
+          ToPort: 22
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 80   # HTTP
+          ToPort: 80
+      Tags:
+        - Key: "Name"
+          Value: "MyFrontEndSecurityGroup"
+
+  # Creating Security group for FrontEnd allowing SSH only
+  BackEndSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MyBackEndSecurityGroup"
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 22   # SSH
+          ToPort: 22
+      Tags:
+        - Key: "Name"
+          Value: "MyBackEndSecurityGroup"
+
+  # Creating Key Pair for using them in instance
+  NewKeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: CFT_Key_Pair
+
+  # Creating FE Instance in Pub Subnet and Enable Public IP Address
+  FrontEndInstance:
+    DependsOn: FrontEndSG
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-05fb0b8c1424f266b
+      InstanceType: t2.micro
+      KeyName: !Ref NewKeyPair
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Ref: FrontEndSG
+          SubnetId: !Ref PublicSubnet1
+      BlockDeviceMappings: 
+        - DeviceName: /dev/sdm
+          Ebs: 
+            VolumeType: gp2
+            DeleteOnTermination: "true"
+            VolumeSize: "8"
+      Tags:
+        - Key: Name
+          Value: My-FE-Instance
+
+  # Creating BE Instance in Pri Subnet and Disable Public IP Address
+  BackEndInstance1:
+    DependsOn: BackEndSG
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-05fb0b8c1424f266b
+      InstanceType: t2.micro
+      KeyName: !Ref NewKeyPair
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet:
+            - Ref: BackEndSG
+          SubnetId: !Ref PrivateSubnet1
+      BlockDeviceMappings: 
+        - DeviceName: /dev/sdm
+          Ebs: 
+            VolumeType: gp2
+            DeleteOnTermination: "true"
+            VolumeSize: "8"
+      Tags:
+        - Key: Name
+          Value: My-BE-Instance-1
+
+  # Creating BE Instance in Pri Subnet and Disable Public IP Address
+  BackEndInstance2:
+    DependsOn: BackEndSG
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-05fb0b8c1424f266b
+      InstanceType: t2.micro
+      KeyName: !Ref NewKeyPair
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet:
+            - Ref: BackEndSG
+          SubnetId: !Ref PrivateSubnet1
+      BlockDeviceMappings: 
+        - DeviceName: /dev/sdm
+          Ebs: 
+            VolumeType: gp2
+            DeleteOnTermination: "true"
+            VolumeSize: "8"
+      Tags:
+        - Key: Name
+          Value: My-BE-Instance-2
+
+
+
+
+
+# Conditions:
+#   FEHasPublicIp: !Not [!Equals ["", !GetAtt FrontEndInstance.PublicIp]]
+#   BE1HasPublicIp: !Not [!Equals [!GetAtt BackEndInstance1.PublicIp, ""]]
+  # BE2HasPublicIp: !Not [!Equals [!GetAtt BackEndInstance2.PublicIp, ""]]
+
+Outputs:
+  FrontEndInstancePublicIp:
+    Description: "Public IP address of Instance"
+    Value: !GetAtt FrontEndInstance.PublicIp
+      # Fn::If:
+      #   - FEHasPublicIp
+      #   - !GetAtt FrontEndInstance.PublicIp
+      #   - "NA"
+  # BackEndInstance1PublicIp:
+  #   Description: "Public IP address of Instance"
+  #   Value: # !GetAtt BackEndInstance1.PublicIp
+  #     Fn::If:
+  #       - BE1HasPublicIp
+  #       - !GetAtt BackEndInstance1.PublicIp
+  #       - "NA"
+  #   Condition: BE1HasPublicIp
+  # BackEndInstance2PublicIp:
+  #   Value: 
+  #     Fn::If:
+  #       - BE2HasPublicIp
+  #       - !GetAtt BackEndInstance2.PublicIp
+  #       - "NA"
+  #   Condition: BE2HasPublicIp
+  PrivateSubnet2Id:
+    Description: "ID of the created Private Subnet 1"
+    Value: !Ref PrivateSubnet2
+  PrivateSubnet1Id:
+    Description: "ID of the created Private Subnet 1"
+    Value: !Ref PrivateSubnet1
+  PublicSubnet1Id:
+    Description: "ID of the created Public Subnet 1"
+    Value: !Ref PublicSubnet1
+  VPCId:
+    Description: "ID of the created VPC"
+    Value: !Ref MyVPC

@@ -1,0 +1,16 @@
+--- # Creating playbook using Variable
+- hosts: all
+  user: ansible
+  become: yes
+  connection: ssh
+  vars:
+    packages_to_install:   # for multiple variables
+      - tree
+      - net-tools
+    #packages_to_install: tree    # for single variables
+
+  tasks:
+    - name: Installing "{{packages_to_install}}" package
+      apt:
+        name: "{{ packages_to_install }}"
+        state: present

@@ -1,0 +1,35 @@
+
+
+
+Logical Resource Name - Under the Resource: what ever resources we are creating. Means the name of the Resources.
+
+DependsOn - the 'DependsOn' attribute is used to explicitly specify the order of resource creation. It ensures that the specified resources are created or updated before the resource containing the DependsOn attribute. It allows you to specify a single resource or a list of resources.
+
+  AttachInternetGateway:
+    DependsOn: MyVPC
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+  DependsOn:
+    - MyVPC
+    - Subnet1
+
+In your provided YAML snippet, we want to attach IG to the VPC that we have created. So, here " DependsOn: MyVPC " states that:-  " AttachInternetGateway " depend's on MyVPC to start it's task. OR we can say after the task completion of " MyVPC " only " AttachInternetGateway " will start it's task.
+----------------------------------------------------------------------------------------
+!Ref - used to reference a resource, it generally returns the physical ID of that resource. The physical ID is a unique identifier assigned by AWS to the created resource.
+Outputs:
+  VPCId:
+    Description: "ID of the created VPC"
+    Value: !Ref MyVPC
+
+The Value: !Ref MyVPC expression will provide the physical ID of the VPC resource named MyVPC in your CloudFormation stack. It's essentially the unique identifier that AWS assigns to the VPC when it's created.
+----------------------------------------------------------------------------------------
+!GetAtt - is used to assign the Allocation ID of an Elastic IP (EIP) resource to the AllocationId property of a NAT Gateway.
+< AllocationId: !GetAtt EIPforNAT.AllocationId >
+
+Breaking it down:
+!GetAtt: This is a CloudFormation intrinsic function used to get the value of an attribute from a resource in the template.
+EIPforNAT: This refers to the logical name of the Elastic IP resource defined in your template.
+AllocationId: This is an attribute of the Elastic IP resource that represents the unique identifier associated with the allocation of the Elastic IP.

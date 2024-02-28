@@ -1,0 +1,36 @@
+- name: Updating the apt package
+  apt: update_cache=yes force_apt_get=yes
+
+- name: Installing Nginx Webserver
+  apt:
+      name: nginx
+      state: present
+
+- name: Creating configuration file for nginx
+  file:
+      path: /etc/nginx/sites-available/chatapp
+      state: touch
+
+- name: Copying our nginx configuration from template to sites-available file
+  template:
+      src: nginx_template.j2
+      dest: /etc/nginx/sites-available/chatapp
+
+- name: Creating a symbolic link from sites-available to sites-enabled
+  file:
+    src: /etc/nginx/sites-available/chatapp
+    dest: /etc/nginx/sites-enabled/chatapp
+    state: link
+    force: yes
+
+- name: removing default nginx file
+  command: rm -rf /etc/nginx/sites-enabled/default
+  args:
+    removes: /etc/nginx/sites-enabled/default
+  ignore_errors: yes
+    #notify: Restart Nginx
+
+- name: restarting nginx service
+  service:
+    name: nginx
+    state: restarted
