@@ -1,0 +1,112 @@
+-------------------------------------------------------- AWS CLI --------------------------------------------------------------------
+To install the AWS CLI in Instance, run the following commands.
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+
+------------------------------------------------------- To install AWS CLI in windows ------------------------------------------------
+go to https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+click on windows -> 
+Download and run the AWS CLI MSI installer for Windows (64-bit):
+https://awscli.amazonaws.com/AWSCLIV2.msi
+
+----------------------------------To set the access key and secret key in the instance so that the cli know to talk to which account.---------------------------------
+
+$ aws configure
+
+or 
+
+vi ~/.aws/credentials (for keys)   &    vi ~/.aws/config (for region)
+
+---------------------------------------------------------To check the keys and regions that are already set ---------------------------------------------  
+
+root@ip-172-31-38-241:/etc# aws configure list
+      Name                    Value             Type    Location
+      ----                    -----             ----    --------
+   profile                <not set>             None    None
+access_key     ****************O6L4 shared-credentials-file
+secret_key     ****************HAEo shared-credentials-file
+    region               ap-south-1      config-file    ~/.aws/config
+
+
+
+
+aws ec2 create-vpc --cidr-block 192.168.0.0/16 --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=MyCLIVPC},{Key=Environment,Value=Production}]' ----> To Create VPC
+
+--------------------------------------------------- To know the VPC ID using the VPC name --------------------------------------------
+
+ubuntu@ip-172-31-38-241:~$ aws ec2 describe-vpcs --filters "Name=tag:Name,Values=<YOUR VPC NAME>" --query 'Vpcs[0].VpcId' --output text
+vpc-0c4ba65de0a28ca0e
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+aws ec2 create-subnet --vpc-id vpc-0c4ba65de0a28ca0e --cidr-block 192.168.1.0/24 --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-subnet}]' ----> To Create Subnet
+
+ubuntu@ip-172-31-38-241:~$ aws ec2 describe-subnets --filters "Name=vpc-id,Values=vpc-0c4ba65de0a28ca0e" ------> To know all the subnets present inside the Vpc using the VPC ID
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+subnet-062e6918b46063aa0 - Public Subnet
+subnet-05ac39100a9f184f2 - Private Subnet
+
+
+aws ec2 create-internet-gateway --tag-specifications 'ResourceType=internet-gateway,Tags=[{Key=Name,Value=my_IGW}]'   ---------> To create Internet Gateway
+
+aws ec2 describe-internet-gateways --query 'InternetGateways[0].InternetGatewayId' --output text   ----------> to know the IGW ID that you created (latest creation)
+
+aws ec2 attach-internet-gateway --internet-gateway-id igw-002690d4960cdb1b2 --vpc-id vpc-0c4ba65de0a28ca0e    --------> to attach IGW to VPC
+
+aws ec2 describe-internet-gateways --query 'InternetGateways[0]' --output text
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+aws ec2 allocate-address     --------------> to create a Elastic Ip address
+aws ec2 describe-addresses   --------------> to get details of Elastic Ip address
+
+aws ec2 create-nat-gateway --subnet-id subnet-062e6918b46063aa0 --allocation-id eipalloc-0508355e6b046396f   -------> to create NAT GW in public subnet and using EIP address
+aws ec2 describe-nat-gateways --query 'NatGateways[0]' --output text 
+
+aws ec2 create-route-table --vpc-id vpc-0c4ba65de0a28ca0e
+aws ec2 describe-route-tables --filters "Name=vpc-id,Values=vpc-0c4ba65de0a28ca0e"
+aws ec2 create-tags --resources rtb-0249f097f15e7e13f --tags Key=Name,Value=PrivateRouteTable
+
+aws ec2 associate-route-table --route-table-id rtb-059b322a305f8ff40 --subnet-id subnet-062e6918b46063aa0  -----> Associate public subnet with public_RT
+aws ec2 associate-route-table --route-table-id rtb-0249f097f15e7e13f --subnet-id subnet-05ac39100a9f184f2  -----> Associate private subnet with private_RT
+
+aws ec2 create-route --route-table-id rtb-059b322a305f8ff40 --destination-cidr-block 0.0.0.0/0 --gateway-id igw-002690d4960cdb1b2   -----> Route traffic from Public_RT to IG
+aws ec2 create-route --route-table-id rtb-0249f097f15e7e13f --destination-cidr-block 0.0.0.0/0 --gateway-id nat-02124023803b1a19a   -----> Route traffic from Private_RT to NAT
+
+aws ec2 create-security-group --group-name Instance1SecurityGroup --description "My I1 security group" --vpc-id vpc-0c4ba65de0a28ca0e
+aws ec2 create-security-group --group-name Instance2SecurityGroup --description "My I2 security group" --vpc-id vpc-0c4ba65de0a28ca0e
+
+aws ec2 authorize-security-group-ingress --group-id sg-08ac824167ef1370d --protocol tcp --port 22 --cidr 0.0.0.0/0    ----> SG 1
+aws ec2 authorize-security-group-ingress --group-id sg-0e51be60b4525b0ce --protocol tcp --port 22 --cidr 0.0.0.0/0    ----> SG 2
+
+aws ec2 authorize-security-group-ingress --group-id sg-08ac824167ef1370d --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp=0.0.0.0/0}]' IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges='[{CidrIp=0.0.0.0/0}]'
+
+aws ec2 create-key-pair --<key-name> 
+
+aws ec2 run-instances --image-id ami-097cb86b4e1b9bf21 --instance-type t2.micro --subnet-id subnet-062e6918b46063aa0 --security-group-ids sg-08ac824167ef1370d --associate-public-ip-address --key-name ARC1 --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=AWS_CLI_1}]'
+
+aws ec2 run-instances --image-id ami-097cb86b4e1b9bf21 --instance-type t2.micro --subnet-id subnet-05ac39100a9f184f2 --security-group-ids sg-0e51be60b4525b0ce --key-name ARC1 --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=AWS_CLI_2}]'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+aws ec2 create-tags --resources subnet-05ac39100a9f184f2 --tags Key=Name,Value=private-subnet1
+
+
+
+
+
+
+
